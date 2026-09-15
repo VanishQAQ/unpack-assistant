@@ -1,0 +1,13 @@
+便携版-*/
+tests/**/.*/
+tests/运行-*/
+tests/分卷测试-*/
+tests/*.exe
+tests/*.exe.config
+*.zip
+*.7z
+*.rar
+*.pdb
+.vs/
+bin/
+obj/
