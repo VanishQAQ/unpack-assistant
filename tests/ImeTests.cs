@@ -21,13 +21,13 @@ static class ImeTests
                 {
                     box.Focus();
                     if (!box.Focused || box.UseSystemPasswordChar || box.ImeMode == ImeMode.Disable) throw new Exception("Focused field still disables IME");
-                    box.Text = " 爱坤 ";
+                    box.Text = " 测试专用密码B2026 ";
                     SendMessage(box.Handle, 0x010D, IntPtr.Zero, IntPtr.Zero);
                     if (!box.Composing) throw new Exception("IME composition not tracked");
                     SendMessage(box.Handle, 0x010E, IntPtr.Zero, IntPtr.Zero);
                     if (box.Composing) throw new Exception("IME composition did not end");
                     other.Focus();
-                    if (!box.UseSystemPasswordChar || box.Text != " 爱坤 ") throw new Exception("Blur masking changed password");
+                    if (!box.UseSystemPasswordChar || box.Text != " 测试专用密码B2026 ") throw new Exception("Blur masking changed password");
                     box.Reveal = true;
                     if (box.UseSystemPasswordChar) throw new Exception("Reveal did not work");
                     box.Reveal = false; box.Focus();

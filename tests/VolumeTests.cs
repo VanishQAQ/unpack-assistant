@@ -12,7 +12,7 @@ static class VolumeTests
     static string root, engine, fixture;
     static int failed;
     static readonly List<string> results = new List<string>();
-    const string Key = "爱坤";
+    const string Key = "测试专用密码B2026";
     static void Assert(bool ok, string message) { if (!ok) throw new Exception(message); }
     static void Test(string title, Action action)
     { try { action(); results.Add("PASS " + title); } catch (Exception ex) { failed++; results.Add("FAIL " + title + ": " + ex.Message); } Console.WriteLine(results.Last()); }

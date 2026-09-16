@@ -19,8 +19,9 @@ static class VolumeQueueUiTests
         {
             form.ShowInTaskbar = false; form.Opacity = 0; form.Show();
             ((TextBox)Field(form,"output")).Text = output;
+            ((CheckBox)Field(form,"virusScan")).Checked = false;
             ((ModeSwitch)Field(form,"mode")).VolumeMode = oldMode;
-            ((List<string>)Field(form,"candidates")).Add("爱坤");
+            ((List<string>)Field(form,"candidates")).Add("测试专用密码B2026");
             typeof(MainForm).GetMethod("AddInputs",Flags).Invoke(form,new object[]{inputs});
             typeof(MainForm).GetMethod("Start",Flags).Invoke(form,new object[]{null,EventArgs.Empty});
             var watch = Stopwatch.StartNew();

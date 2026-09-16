@@ -22,6 +22,12 @@ namespace LayerUnpacker
         readonly ListBox passwordList = new ListBox();
         readonly TextBox log = new TextBox();
         readonly Panel advancedHost = new Panel { Dock = DockStyle.Fill };
+        readonly Panel antivirusHost = new Panel { Dock = DockStyle.Fill };
+        readonly CheckBox virusScan = new CheckBox { Text = "启用解压前后病毒扫描", Checked = true, AutoSize = true };
+        readonly Panel languageHost = new Panel { Dock = DockStyle.Fill };
+        readonly ComboBox languageChoice = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
+        string rawLog = "";
+        bool changingLanguage;
         readonly Label status = new Label(), note = new Label();
         readonly NumericUpDown depth = Number(30, 1, 100), nodes = Number(1000, 1, 10000), gigabytes = Number(20, 1, 2048), fileCount = Number(100000, 1, 1000000), minutes = Number(30, 1, 1440), freeGb = Number(1, 0, 1024);
         readonly Button start, pause, resume, cancel, add, remove, restore, clear;
@@ -42,7 +48,7 @@ namespace LayerUnpacker
             passwordStore = persistPasswords ? new PasswordStore(passwordFile) : null;
             outputStore = persistPasswords ? new OutputDirectoryStore(passwordFile == null ? null : Path.Combine(Path.GetDirectoryName(passwordFile), "output-directory.txt")) : null;
             preferencesStore = persistPasswords ? new PreferencesStore(passwordFile == null ? null : Path.Combine(Path.GetDirectoryName(passwordFile), "preferences.json")) : null;
-            Text = "拆包助手 · 自动多层解压工具 0.3.3 预览版";
+            Text = "拆包助手 · 自动多层解压工具 0.4.1 预览版";
             Font = new Font("Microsoft YaHei UI", 9F); ForeColor = ink;
             BackColor = Color.FromArgb(244, 247, 251); StartPosition = FormStartPosition.CenterScreen;
             ClientSize = new Size(1100, 780); MinimumSize = new Size(940, 720); AutoScaleMode = AutoScaleMode.Dpi;
@@ -60,7 +66,8 @@ namespace LayerUnpacker
             mode.Visible = false; mode.TabStop = false;
             mode.ValueChanged += delegate { SavePreferences(); };
             header.Controls.Add(new Label { Text = "拆包助手", Font = new Font(Font.FontFamily, 25, FontStyle.Bold), AutoSize = true, Location = new Point(0, 0), ForeColor = ink });
-            var tag = new Label { Text = "本地处理  /  0.3.3 预览版", AutoSize = true, Anchor = AnchorStyles.Top | AnchorStyles.Right, ForeColor = blue };
+            var tag = new Label { Text = "本地处理  /  0.4.1 预览版", AutoSize = true, Anchor = AnchorStyles.Top | AnchorStyles.Right, ForeColor = blue };
+            tag.TextChanged += delegate { tag.Location = new Point(header.Width - tag.PreferredWidth - 4, 16); };
             header.Controls.Add(tag); header.Resize += delegate { tag.Location = new Point(header.Width - tag.PreferredWidth - 4, 16); }; layout.Controls.Add(header, 0, 0);
             var top = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65)); top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35)); layout.Controls.Add(top, 0, 1);
@@ -69,8 +76,8 @@ namespace LayerUnpacker
             var inputGrid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
             inputGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40)); inputGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); left.Controls.Add(inputGrid);
             var fileButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
-            add = Button("添加文件", delegate { using (var dialog = new OpenFileDialog { Multiselect = true, Filter = "所有文件|*.*" }) if (dialog.ShowDialog(this) == DialogResult.OK) AddInputs(dialog.FileNames); });
-            remove = Button("移除选中", delegate { if (running) return; foreach (ListViewItem item in files.SelectedItems) inputs.Remove((string)item.Tag); RefreshFiles(); });
+            add = Button("添加文件", delegate { using (var dialog = new OpenFileDialog { Multiselect = true, Filter = Language.T("所有文件|*.*") }) if (dialog.ShowDialog(this) == DialogResult.OK) AddInputs(dialog.FileNames); });
+            remove = Button("移除选中", delegate { if (running) return; foreach (ListViewItem item in files.SelectedItems) inputs.Remove((string)item.Tag); RefreshFiles(); }, 112);
             clear = Button("全部移除", delegate { if (running) return; inputs.Clear(); RefreshFiles(); });
             restore = Button("恢复任务", Restore);
             fileButtons.Controls.AddRange(new Control[] { add, remove, clear, restore }); inputGrid.Controls.Add(fileButtons, 0, 0);
@@ -85,7 +92,7 @@ namespace LayerUnpacker
             var pwButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
             pwButtons.Controls.Add(Button("添加", delegate { AddPassword(); }, 60));
             pwButtons.Controls.Add(Button("粘贴多行", delegate { if (Clipboard.ContainsText()) { AddCandidates(Clipboard.GetText().Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None)); } }, 87));
-            pwButtons.Controls.Add(Button("移除", delegate { if (passwordList.SelectedIndex >= 0) { candidates.RemoveAt(passwordList.SelectedIndex); RefreshPasswords(); SavePasswords(); } }, 60));
+            pwButtons.Controls.Add(Button("移除", delegate { if (passwordList.SelectedIndex >= 0) { candidates.RemoveAt(passwordList.SelectedIndex); RefreshPasswords(); SavePasswords(); } }, 75));
             pwGrid.Controls.Add(pwButtons, 0, 1);
             passwordList.Dock = DockStyle.Fill; passwordList.BorderStyle = BorderStyle.None; passwordList.IntegralHeight = false; pwGrid.Controls.Add(passwordList, 0, 2);
             show.Text = "始终显示（输入时自动显示）"; show.Dock = DockStyle.Fill; show.AutoSize = true;
@@ -94,7 +101,7 @@ namespace LayerUnpacker
             pathGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82)); pathGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); pathGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105));
             pathGrid.Controls.Add(new Label { Text = "输出目录", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
             output.Text = @"E:\NO GAME NO LIFE"; output.Dock = DockStyle.Fill;
-            pathGrid.Controls.Add(output, 1, 0); pathGrid.Controls.Add(Button("选择目录", delegate { using (var dialog = new FolderBrowserDialog { Description = "选择输出目录" }) if (dialog.ShowDialog(this) == DialogResult.OK) output.Text = dialog.SelectedPath; }), 2, 0);
+            pathGrid.Controls.Add(output, 1, 0); pathGrid.Controls.Add(Button("选择目录", delegate { using (var dialog = new FolderBrowserDialog { Description = Language.T("选择输出目录") }) if (dialog.ShowDialog(this) == DialogResult.OK) output.Text = dialog.SelectedPath; }), 2, 0);
             note.Text = "自动识别普通包与分卷 · 同组分卷放在同一目录，可全部添加"; note.Dock = DockStyle.Fill; note.ForeColor = Color.FromArgb(100, 114, 134); note.TextAlign = ContentAlignment.MiddleLeft;
             pathGrid.Controls.Add(note, 1, 1); layout.Controls.Add(pathGrid, 0, 2);
             var tabs = new TabControl { Dock = DockStyle.Fill };
@@ -105,7 +112,7 @@ namespace LayerUnpacker
             settings.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140)); settings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); settings.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140)); settings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             settings.Controls.Add(new Label { Text = "解压引擎", AutoSize = true }, 0, 0); enginePath.Text = ArchiveEngine.Find(); enginePath.Dock = DockStyle.Fill;
             settings.Controls.Add(enginePath, 1, 0); settings.SetColumnSpan(enginePath, 2);
-            settings.Controls.Add(Button("选择引擎", delegate { using (var dialog = new OpenFileDialog { Filter = "支持的引擎|bz.exe;7z.exe;WinRAR.exe;Rar.exe|7-Zip|7z.exe|WinRAR（仅 RAR）|WinRAR.exe;Rar.exe|Bandizip|bz.exe" }) if (dialog.ShowDialog(this) == DialogResult.OK) enginePath.Text = dialog.FileName; }), 3, 0);
+            settings.Controls.Add(Button("选择引擎", delegate { using (var dialog = new OpenFileDialog { Filter = Language.T("支持的引擎|bz.exe;7z.exe;WinRAR.exe;Rar.exe|7-Zip|7z.exe|WinRAR（仅 RAR）|WinRAR.exe;Rar.exe|Bandizip|bz.exe") }) if (dialog.ShowDialog(this) == DialogResult.OK) enginePath.Text = dialog.FileName; }), 3, 0);
             Setting(settings, "最大层数", depth, 0, 1); Setting(settings, "最多归档数", nodes, 2, 1);
             Setting(settings, "累计写入上限 / GB", gigabytes, 0, 2); Setting(settings, "累计文件数上限", fileCount, 2, 2);
             Setting(settings, "单次超时 / 分钟", minutes, 0, 3); Setting(settings, "最低剩余空间 / GB", freeGb, 2, 3);
@@ -116,7 +123,31 @@ namespace LayerUnpacker
             pause = Button("暂停", delegate { if (current != null) { current.PauseRequested = true; pause.Enabled = false; resume.Enabled = true; Append("将在当前解压完成后的安全节点暂停。"); } }, 75);
             resume = Button("继续", Resume, 75); cancel = Button("取消", delegate { if (current != null) { current.Cancel(); Append("正在取消当前解压任务……"); } }, 75);
             var settingsButton = Button("设置", ShowSettings, 102);
-            Disposed += delegate { log.Dispose(); advancedHost.Dispose(); };
+            var antivirusLayout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(12) };
+            antivirusLayout.Controls.Add(virusScan);
+            antivirusLayout.Controls.Add(new Label { Text = "Microsoft Defender", AutoSize = true });
+            antivirusLayout.Controls.Add(new Label { AutoSize = true, MaximumSize = new Size(620, 0), Margin = new Padding(0, 20, 0, 16), Text = "解压前扫描原包及整组分卷，每层解压后扫描产物。\r\n发现威胁或扫描未成功时，暂停并询问是否继续。\r\n扫描结果及失败原因显示在任务进度，并写入报告。\r\n\r\n需要 Microsoft Defender 服务可用。其他杀毒软件接管防护时，Defender 可能不可用。\r\n开关自动保存，超时沿用高级选项中的单次超时。\r\n加密内容须先解开再扫描；未发现威胁不代表绝对安全。" });
+            antivirusLayout.Controls.Add(Button("打开 Windows 安全中心", delegate { try { Process.Start(new ProcessStartInfo("windowsdefender:") { UseShellExecute = true }); } catch { LocalizedMessageBox.Show(this, "无法打开，请在 Windows 设置中打开 Windows 安全中心。", "病毒扫描"); } }, 210));
+            antivirusHost.Controls.Add(antivirusLayout);
+            var languageLayout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(12) };
+            languageLayout.Controls.Add(new Label { Text = "界面语言", AutoSize = true });
+            languageChoice.Items.AddRange(new object[] { Language.English ? "Simplified Chinese" : "简体中文", "English" });
+            languageChoice.SelectedIndex = Language.English ? 1 : 0;
+            languageLayout.Controls.Add(languageChoice);
+            languageLayout.Controls.Add(new Label { Text = "语言立即生效并自动保存。文件名、路径和密码保持原样。", AutoSize = true, MaximumSize = new Size(620, 0), Margin = new Padding(0, 20, 0, 0) });
+            languageHost.Controls.Add(languageLayout);
+            languageChoice.SelectedIndexChanged += delegate {
+                if (changingLanguage || languageChoice.SelectedIndex < 0) return;
+                changingLanguage = true;
+                try {
+                Language.Current = languageChoice.SelectedIndex == 1 ? "en" : "zh-CN"; SavePreferences();
+                languageChoice.Items[0] = Language.English ? "Simplified Chinese" : "简体中文";
+                Language.Apply(this); Language.Apply(advancedHost); Language.Apply(antivirusHost); Language.Apply(languageHost);
+                if (settingsPage != null) settingsPage.RefreshLanguage();
+                RefreshTree(); RefreshPasswords(); RefreshFiles();
+                } finally { changingLanguage = false; }
+            };
+            Disposed += delegate { log.Dispose(); advancedHost.Dispose(); antivirusHost.Dispose(); languageHost.Dispose(); };
             actions.Controls.AddRange(new Control[] { start, pause, resume, cancel, settingsButton }); layout.Controls.Add(actions, 0, 4);
             status.Dock = DockStyle.Fill; status.TextAlign = ContentAlignment.MiddleLeft; status.Text = "就绪 · 添加文件即可开始"; layout.Controls.Add(status, 0, 5);
             timer.Interval = 650; timer.Tick += delegate { if (running) RefreshTree(); }; timer.Start();
@@ -145,6 +176,8 @@ namespace LayerUnpacker
                     show.Checked = saved.ShowPasswords;
                     mode.VolumeMode = saved.VolumeMode;
                     restoreHelpShown = saved.RestoreHelpShown;
+                    virusScan.Checked = saved.VirusScanEnabled;
+
                     foreach (string path in saved.Inputs ?? new string[0])
                         if (!string.IsNullOrWhiteSpace(path) && !inputs.Contains(path, StringComparer.OrdinalIgnoreCase)) inputs.Add(path);
                     RefreshFiles();
@@ -154,13 +187,16 @@ namespace LayerUnpacker
                 foreach (var control in new[] { depth, nodes, gigabytes, fileCount, minutes, freeGb }) control.ValueChanged += delegate { SavePreferences(); };
                 enginePath.TextChanged += delegate { SavePreferences(); };
                 show.CheckedChanged += delegate { SavePreferences(); };
+                virusScan.CheckedChanged += delegate { SavePreferences(); };
+
             }
         }
+        protected override void OnShown(EventArgs e) { base.OnShown(e); Language.Apply(this); Language.Apply(advancedHost); Language.Apply(antivirusHost); Language.Apply(languageHost); }
         static void SetNumber(NumericUpDown control, int value) { control.Value = Math.Max(control.Minimum, Math.Min(control.Maximum, value)); }
         void SavePreferences()
         {
             if (!preferencesReady || preferencesStore == null) return;
-            try { preferencesStore.Save(new Preferences { Engine = enginePath.Text, Depth = (int)depth.Value, Nodes = (int)nodes.Value, Gigabytes = (int)gigabytes.Value, Files = (int)fileCount.Value, Minutes = (int)minutes.Value, FreeGb = (int)freeGb.Value, ShowPasswords = show.Checked, VolumeMode = mode.VolumeMode, RestoreHelpShown = restoreHelpShown, Inputs = inputs.ToArray() }); }
+            try { preferencesStore.Save(new Preferences { Engine = enginePath.Text, Depth = (int)depth.Value, Nodes = (int)nodes.Value, Gigabytes = (int)gigabytes.Value, Files = (int)fileCount.Value, Minutes = (int)minutes.Value, FreeGb = (int)freeGb.Value, ShowPasswords = show.Checked, VolumeMode = mode.VolumeMode, RestoreHelpShown = restoreHelpShown, VirusScanEnabled = virusScan.Checked, VirusScanner = "Defender", Language = Language.Current, Inputs = inputs.ToArray() }); }
             catch { Append("设置保存失败，请检查本地配置目录权限；当前更改仍可使用。"); }
         }
         static NumericUpDown Number(decimal value, decimal min, decimal max) { return new NumericUpDown { Minimum = min, Maximum = max, Value = value, Width = 110, ThousandsSeparator = true }; }
@@ -184,7 +220,7 @@ namespace LayerUnpacker
             files.Items.Clear(); foreach (string path in inputs)
             {
                 var item = new ListViewItem(Path.GetFileName(path)) { Tag = path, ToolTipText = path };
-                item.SubItems.Add(File.Exists(path) ? (new FileInfo(path).Length / 1048576.0).ToString("N1") + " MB" : "文件缺失"); files.Items.Add(item);
+                item.SubItems.Add(File.Exists(path) ? (new FileInfo(path).Length / 1048576.0).ToString("N1") + " MB" : Language.T("文件缺失")); files.Items.Add(item);
             }
         }
         void AddPassword() { if (password.Text.Length > 0) { AddCandidates(new[] { password.Text }); password.Clear(); } }
@@ -215,21 +251,23 @@ namespace LayerUnpacker
         void RefreshPasswords()
         {
             passwordList.Items.Clear(); bool show = passwordList.Tag is bool && (bool)passwordList.Tag;
-            for (int i = 0; i < candidates.Count; i++) passwordList.Items.Add(show ? candidates[i] : "候选 " + (i + 1) + "    ••••••••");
+            for (int i = 0; i < candidates.Count; i++) passwordList.Items.Add(show ? candidates[i] : Language.T("候选 ") + (i + 1) + "    ••••••••");
         }
         void Append(string text)
         {
             if (IsDisposed) return;
             if (InvokeRequired) { try { BeginInvoke(new Action<string>(Append), text); } catch (InvalidOperationException) { } return; }
-            log.AppendText(DateTime.Now.ToString("HH:mm:ss") + "  " + text + Environment.NewLine);
-            if (log.TextLength > 80000) log.Text = log.Text.Substring(log.TextLength - 60000);
+            rawLog += DateTime.Now.ToString("HH:mm:ss") + "  " + text + Environment.NewLine;
+            if (rawLog.Length > 80000) rawLog = rawLog.Substring(rawLog.Length - 60000);
+            log.Text = rawLog;
             status.Text = text;
         }
         Limits GetLimits() { return new Limits { MaxDepth = (int)depth.Value, MaxNodes = (int)nodes.Value, MaxBytes = (long)gigabytes.Value * 1024 * 1024 * 1024, MaxFiles = (int)fileCount.Value, TimeoutSeconds = (int)minutes.Value * 60, MinFreeBytes = (long)freeGb.Value * 1024 * 1024 * 1024 }; }
         void SetBusy(bool value)
         {
             running = value; start.Enabled = !value; add.Enabled = !value; remove.Enabled = !value; clear.Enabled = !value; restore.Enabled = !value;
-            pause.Enabled = value; cancel.Enabled = value; resume.Enabled = !value && jobs.Any(j => j.State.Status == "等待密码" || j.State.Status == "已取消");
+            pause.Enabled = value; cancel.Enabled = value; resume.Enabled = !value && jobs.Any(j => j.State.Status == "等待密码" || j.State.Status == "已取消" || j.State.Status == "扫描暂停");
+            virusScan.Enabled = !value; languageChoice.Enabled = !value;
             output.Enabled = !value; enginePath.Enabled = !value; mode.Enabled = !value;
         }
         async void Start(object sender, EventArgs e)
@@ -262,8 +300,18 @@ namespace LayerUnpacker
                 {
                     if (job.State.Status == "成功" || job.State.Status == "失败" || job.State.Status == "文件已变化" || job.State.Status == "部分完成") continue;
                     current = job; job.AddPasswords(candidates); job.PauseRequested = false;
+                    job.State.VirusScanEnabled = virusScan.Checked;
+                    job.State.VirusScannerName = "Microsoft Defender";
+                    job.VirusScanner = new DefenderScanner();
+                    job.ConfirmScanRisk = record => {
+                        if (closing || IsDisposed || job.Cancellation.IsCancellationRequested) return false;
+                        return (bool)Invoke(new Func<bool>(() => !closing && LocalizedMessageBox.Show(this,
+                            record.Status + "\r\n" + record.Phase + "：" + record.Target + "\r\n\r\n" + record.Detail +
+                            "\r\n\r\n是否仍然继续处理？选择“否”将暂停任务。继续不会关闭系统防护，也不能恢复已隔离的文件。",
+                            job.State.VirusScannerName + " · " + record.Status, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes));
+                    };
                     await Task.Run(new Action(job.Run));
-                    if (job.State.Status == "已取消") break;
+                    if (job.State.Status == "已取消" || job.State.Status == "扫描暂停") break;
                 }
             }
             finally
@@ -285,7 +333,7 @@ namespace LayerUnpacker
         void Restore(object sender, EventArgs e)
         {
             ShowRestoreHelpOnce(delegate {
-                MessageBox.Show(this,
+                LocalizedMessageBox.Show(this,
                     "恢复任务可以继续处理上次未完成的解压，例如关闭软件、取消解压或缺少密码之后。\r\n\r\n" +
                     "1. 在接下来的窗口中，打开上次的输出文件夹，选择“任务状态.json”。\r\n" +
                     "2. 如需密码，先添加候选密码，再点击“继续”。\r\n\r\n" +
@@ -294,7 +342,7 @@ namespace LayerUnpacker
                     "此说明仅在首次点击“恢复任务”时显示。",
                     "恢复任务 · 使用说明", MessageBoxButtons.OK, MessageBoxIcon.Information);
             });
-            using (var dialog = new OpenFileDialog { Filter = "任务状态|任务状态.json" })
+            using (var dialog = new OpenFileDialog { Filter = Language.T("任务状态|任务状态.json") })
             {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 try
@@ -323,13 +371,14 @@ namespace LayerUnpacker
             tree.BeginUpdate(); tree.Nodes.Clear();
             foreach (Runner job in jobs)
             {
-                var root = new TreeNode(Path.GetFileName(job.State.Input) + "    [" + job.State.Status + "]") { Tag = job.State.Home, ToolTipText = job.State.Home };
+                var root = new TreeNode(Path.GetFileName(job.State.Input) + "    [" + Language.T(job.State.Status) + "]") { Tag = job.State.Home, ToolTipText = job.State.Home };
                 tree.Nodes.Add(root); var lookup = new Dictionary<int, TreeNode>();
                 if (selected == job.State.Home) tree.SelectedNode = root;
                 lock (job.Sync) foreach (ArchiveNode node in job.State.Nodes)
                 {
-                    var item = new TreeNode("第 " + node.Depth + " 层 · " + Path.GetFileName(node.Source) + "    " + node.Status) { ToolTipText = node.Message, Tag = node.Result };
+                    var item = new TreeNode(Language.T("第 ") + node.Depth + Language.T(" 层 · ") + Path.GetFileName(node.Source) + "    " + Language.T(node.Status) + ScanSummary.Suffix(job.State, node.Id)) { ToolTipText = Language.T(node.Message) + ScanSummary.Details(job.State, node.Id), Tag = node.Result };
                     item.ForeColor = node.Status == "完成" ? Color.FromArgb(21, 125, 89) : node.Status == "等待密码" || node.Status == "失败" || node.Status == "受限" ? Color.FromArgb(165, 86, 25) : ink;
+                    if ((job.State.VirusScans ?? new List<VirusScanRecord>()).Any(r => r.Node == node.Id && r.Status != "未发现威胁")) item.ForeColor = Color.FromArgb(165, 86, 25);
                     TreeNode parent; if (lookup.TryGetValue(node.Parent, out parent)) parent.Nodes.Add(item); else root.Nodes.Add(item); lookup[node.Id] = item;
                     if (selected == node.Result) tree.SelectedNode = item;
                 }
@@ -342,7 +391,7 @@ namespace LayerUnpacker
             if (settingsPage != null) return;
             bool openedWhileRunning = running;
             var mainPage = Controls[0];
-            settingsPage = new SettingsForm(jobs.Select(j => j.State).ToArray(), inputs.Concat(jobs.SelectMany(j => VolumeSet.Inputs(j.State))).ToArray(), output.Text, log, advancedHost, running, () => ExportReport(this, EventArgs.Empty)) { TopLevel = false, FormBorderStyle = FormBorderStyle.None, MinimumSize = Size.Empty, Dock = DockStyle.Fill };
+            settingsPage = new SettingsForm(jobs.Select(j => j.State).ToArray(), inputs.Concat(jobs.SelectMany(j => VolumeSet.Inputs(j.State))).ToArray(), output.Text, log, advancedHost, running, () => ExportReport(this, EventArgs.Empty), antivirusHost, languageHost) { TopLevel = false, FormBorderStyle = FormBorderStyle.None, MinimumSize = Size.Empty, Dock = DockStyle.Fill };
             settingsPage.FormClosed += delegate {
                 var closed = settingsPage; settingsPage = null; Controls.Remove(closed); closed.Dispose(); mainPage.Visible = true;
                 if (!openedWhileRunning && !running) RefreshManagedJobs();
@@ -362,20 +411,20 @@ namespace LayerUnpacker
         {
             if (running) { Append("请等待任务停止后导出报告。"); return; }
             if (jobs.Count == 0) return;
-            using (var dialog = new SaveFileDialog { Filter = "Markdown 报告|*.md", FileName = "解压处理报告.md" })
+            using (var dialog = new SaveFileDialog { Filter = Language.T("Markdown 报告|*.md"), FileName = "解压处理报告.md" })
             {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 try
                 {
                     var text = new System.Text.StringBuilder(); foreach (Runner job in jobs) { job.WriteReport(); text.AppendLine(File.ReadAllText(Path.Combine(job.State.Home, "处理报告.md"))); }
-                    File.WriteAllText(dialog.FileName, text.ToString(), new System.Text.UTF8Encoding(false)); Append("处理报告已导出。");
+                    File.WriteAllText(dialog.FileName, Language.T(text.ToString()), new System.Text.UTF8Encoding(false)); Append("处理报告已导出。");
                 }
                 catch { Append("报告写入失败，请检查目录权限。"); }
             }
         }
         void OnClosing(object sender, FormClosingEventArgs e)
         {
-            if (settingsPage != null && settingsPage.IsBusy) { e.Cancel = true; MessageBox.Show(this, "正在统计或清理，请完成后关闭。", "拆包助手"); return; }
+            if (settingsPage != null && settingsPage.IsBusy) { e.Cancel = true; LocalizedMessageBox.Show(this, "正在统计或清理，请完成后关闭。", "拆包助手"); return; }
             SaveOutputDirectory();
             SavePreferences();
             AddPassword();
@@ -429,9 +478,9 @@ namespace LayerUnpacker
                 catch (Exception ex) { File.WriteAllText(args[1] + ".error.txt", ex.ToString()); }
                 return;
             }
-            Application.ThreadException += delegate { MessageBox.Show("界面操作失败，请检查目录权限后重试。", "拆包助手"); };
-            try { Application.Run(new MainForm()); }
-            catch (Exception) { MessageBox.Show("程序启动失败。请确认系统已启用 .NET Framework 4.8。", "拆包助手", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+            Application.ThreadException += delegate { LocalizedMessageBox.Show("界面操作失败，请检查目录权限后重试。", "拆包助手"); };
+            try { if (Language.Choose(new PreferencesStore())) Application.Run(new MainForm()); }
+            catch (Exception) { LocalizedMessageBox.Show("程序启动失败。请确认系统已启用 .NET Framework 4.8。", "拆包助手", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
     }
 }

@@ -12,6 +12,9 @@ namespace LayerUnpacker
         public bool ShowPasswords;
         public bool VolumeMode;
         public bool RestoreHelpShown;
+        public bool VirusScanEnabled = true;
+        public string VirusScanner = "Defender";
+        public string Language;
         public string[] Inputs = new string[0];
     }
     public sealed class PreferencesStore

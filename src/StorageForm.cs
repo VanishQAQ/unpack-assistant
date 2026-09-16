@@ -34,7 +34,7 @@ namespace LayerUnpacker
             var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false }; grid.Controls.Add(buttons, 0, 3);
             AddButton(buttons, "载入已有任务", delegate {
                 if (busy) return;
-                using (var dialog = new OpenFileDialog { Filter = "任务状态|任务状态.json" })
+                using (var dialog = new OpenFileDialog { Filter = Language.T("任务状态|任务状态.json") })
                     if (dialog.ShowDialog(this) == DialogResult.OK) { try { AddState(Disk.Load(dialog.FileName)); tasks.SelectedIndex = paths.IndexOf(dialog.FileName); } catch (Exception ex) { Error(ex); } }
             });
             AddButton(buttons, "打开选中结果", delegate { if (state != null) Open(results.SelectedItems.Count > 0 ? (string)results.SelectedItems[0].Tag : StorageManager.PrimaryResult(state)); });
@@ -46,6 +46,13 @@ namespace LayerUnpacker
             foreach (var s in states) AddState(s);
             Shown += delegate { if (paths.Count > 0) tasks.SelectedIndex = 0; else { clean.Enabled = false; usage.Text = "载入任务目录中的“任务状态.json”，即可查看占用和各层结果。"; } };
         }
+        public void RefreshLanguage()
+        {
+            Language.Apply(this);
+            if (state != null && results.Items.Count == state.Nodes.Count)
+                for (int i = 0; i < state.Nodes.Count; i++)
+                    results.Items[i].Text = Language.T("第 ") + state.Nodes[i].Depth + Language.T(" 层 · ") + Language.T(state.Nodes[i].Status);
+        }
         void AddState(JobState s)
         {
             string path = Path.Combine(s.Home, "任务状态.json");
@@ -53,7 +60,7 @@ namespace LayerUnpacker
             paths.Add(path); protectedInputs.AddRange(VolumeSet.Inputs(s)); tasks.Items.Add(Path.GetFileName(s.Home));
         }
         void AddButton(Control panel, string title, EventHandler handler) { var b = new Button { Text = title, AutoSize = true }; b.Click += handler; panel.Controls.Add(b); }
-        void Error(Exception ex) { MessageBox.Show(this, ex is IOException ? ex.Message : "操作失败，请检查任务文件和目录权限。", "结果管理", MessageBoxButtons.OK, MessageBoxIcon.Information); }
+        void Error(Exception ex) { LocalizedMessageBox.Show(this, ex is IOException ? ex.Message : "操作失败，请检查任务文件和目录权限。", "结果管理", MessageBoxButtons.OK, MessageBoxIcon.Information); }
         void Open(string path) { try { if (Directory.Exists(path)) Process.Start(new ProcessStartInfo("explorer.exe", BandizipEngine.Quote(path)) { UseShellExecute = false }); } catch (Exception ex) { Error(ex); } }
         async Task RefreshUsage()
         {
@@ -66,7 +73,7 @@ namespace LayerUnpacker
                 results.Items.Clear();
                 foreach (var node in state.Nodes)
                 {
-                    var item = new ListViewItem("第 " + node.Depth + " 层 · " + node.Status) { Tag = node.Result };
+                    var item = new ListViewItem(Language.T("第 ") + node.Depth + Language.T(" 层 · ") + Language.T(node.Status)) { Tag = node.Result };
                     item.SubItems.Add(Path.GetFileName(node.Source)); item.SubItems.Add(node.Exported.Count.ToString()); item.SubItems.Add(node.Result); results.Items.Add(item);
                 }
                 usage.Text = "最终结果：" + StorageManager.Size(measured.Results) + "（" + measured.ResultFiles + " 个文件）    中间文件：" + StorageManager.Size(measured.Work)
@@ -81,14 +88,14 @@ namespace LayerUnpacker
         async void Cleanup(object sender, EventArgs e)
         {
             if (busy || state == null || measured == null) return;
-            if (MessageBox.Show(this, "确认最终结果已满足需要后，可永久删除约 " + StorageManager.Size(measured.Reclaimable) + " 的已登记中间文件。\r\n\r\n原始输入、最终结果和报告会保留。之后重新解压需从原始输入新建任务。\r\n\r\n现在校验并清理？", "确认清理", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+            if (LocalizedMessageBox.Show(this, "确认最终结果已满足需要后，可永久删除约 " + StorageManager.Size(measured.Reclaimable) + " 的已登记中间文件。\r\n\r\n原始输入、最终结果和报告会保留。之后重新解压需从原始输入新建任务。\r\n\r\n现在校验并清理？", "确认清理", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
             busy = true; tasks.Enabled = false; clean.Enabled = false;
             try
             {
                 string path = paths[tasks.SelectedIndex];
                 state = await Task.Run(() => StorageManager.Clean(path, protectedInputs, message => BeginInvoke(new Action(() => usage.Text = message))));
                 StorageManager.WriteIndex(state);
-                MessageBox.Show(this, "清理完成，累计释放 " + StorageManager.Size(state.ReleasedBytes) + "。", "结果管理");
+                LocalizedMessageBox.Show(this, "清理完成，累计释放 " + StorageManager.Size(state.ReleasedBytes) + "。", "结果管理");
             }
             catch (Exception ex) { Error(ex); }
             finally { busy = false; tasks.Enabled = true; }

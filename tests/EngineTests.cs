@@ -40,7 +40,7 @@ static class EngineTests
     }
     static Runner Run(string source, string engine, bool volume = false, string[] keys = null)
     {
-        var runner = new Runner(Runner.Create(source, Path.Combine(root, "outputs"), engine, new Limits(), volume), keys ?? new[] { "wrong", "爱坤" }, false);
+        var runner = new Runner(Runner.Create(source, Path.Combine(root, "outputs"), engine, new Limits(), volume), keys ?? new[] { "wrong", "测试专用密码B2026" }, false);
         runner.Run(); return runner;
     }
     static void Success(Runner runner, string hash)
@@ -61,9 +61,9 @@ static class EngineTests
         string fixture = Path.Combine(root, "中文 空格"); Directory.CreateDirectory(Path.Combine(fixture, "空目录"));
         string file = Path.Combine(fixture, "正文.txt"); File.WriteAllText(file, "中文解压验证", Encoding.UTF8); string hash = Disk.Hash(file);
         string data = Path.Combine(fixture, "数据.bin"); var bytes = new byte[160000]; new Random(77).NextBytes(bytes); File.WriteAllBytes(data, bytes);
-        string z = Pack(seven, "中文.7z", fixture, "爱坤", false);
-        string zip = Pack(seven, "中文.zip", fixture, "爱坤", false);
-        string r = Pack(rar, "中文.rar", fixture, "爱坤", false);
+        string z = Pack(seven, "中文.7z", fixture, "测试专用密码B2026", false);
+        string zip = Pack(seven, "中文.zip", fixture, "测试专用密码B2026", false);
+        string r = Pack(rar, "中文.rar", fixture, "测试专用密码B2026", false);
         foreach (string engine in new[] { seven, rar })
         {
             string selected = engine;
@@ -77,25 +77,25 @@ static class EngineTests
         Test("7-Zip encrypted 7z", () => Success(Run(z, seven), hash));
         Test("7-Zip encrypted ZIP", () => Success(Run(zip, seven), hash));
         Test("7-Zip plain ZIP", () => Success(Run(Pack(seven,"plain.zip",fixture,null,false), seven), hash));
-        string nested = Pack(seven, "nested.7z", r, "爱坤", false);
+        string nested = Pack(seven, "nested.7z", r, "测试专用密码B2026", false);
         Test("7-Zip nested 7z -> RAR", () => { var run = Run(nested, seven); Success(run,hash); Assert(run.State.Nodes.Count == 2, "missing nested layer"); });
         Test("7-Zip disguised mp4", () => { string fake = Path.Combine(root,"disguised.mp4"); File.Copy(nested,fake); Success(Run(fake,seven),hash); });
-        Test("WinRAR nested RAR", () => Success(Run(Pack(rar,"nested.rar",r,"爱坤",false),rar),hash));
+        Test("WinRAR nested RAR", () => Success(Run(Pack(rar,"nested.rar",r,"测试专用密码B2026",false),rar),hash));
         Test("WinRAR selection resolves console", () => Assert(new ArchiveEngine(Path.Combine(Path.GetDirectoryName(rar),"WinRAR.exe")).PathName == rar, "wrong resolved path"));
         Test("WinRAR rejects unsupported layer clearly", () => { var run = Run(z,rar); Assert(run.State.Status == "失败" && run.State.Nodes[0].Message.Contains("仅支持 RAR"),"missing guidance"); });
         Test("WinRAR switch engine and resume", () => {
-            string mixed = Pack(rar,"mixed.rar",z,"爱坤",false); var run = Run(mixed,rar);
+            string mixed = Pack(rar,"mixed.rar",z,"测试专用密码B2026",false); var run = Run(mixed,rar);
             Assert(run.State.Status != "成功", "unexpected RAR reader support");
-            run.State.Engine = seven; var resumed = new Runner(run.State,new[]{"爱坤"},true); resumed.Run(); Success(resumed,hash);
+            run.State.Engine = seven; var resumed = new Runner(run.State,new[]{"测试专用密码B2026"},true); resumed.Run(); Success(resumed,hash);
         });
-        string rv = Pack(rar,"volumes.rar",fixture,"爱坤",true);
+        string rv = Pack(rar,"volumes.rar",fixture,"测试专用密码B2026",true);
         Test("WinRAR encrypted multi-volume", () => Success(Run(rv,rar,true),hash));
         Test("7-Zip encrypted RAR volumes", () => Success(Run(rv,seven,true),hash));
-        Test("7-Zip encrypted 7z volumes", () => Success(Run(Pack(seven,"volumes.7z",fixture,"爱坤",true),seven,true),hash));
-        Test("7-Zip encrypted ZIP volumes", () => Success(Run(Pack(seven,"volumes.zip",fixture,"爱坤",true),seven,true),hash));
+        Test("7-Zip encrypted 7z volumes", () => Success(Run(Pack(seven,"volumes.7z",fixture,"测试专用密码B2026",true),seven,true),hash));
+        Test("7-Zip encrypted ZIP volumes", () => Success(Run(Pack(seven,"volumes.zip",fixture,"测试专用密码B2026",true),seven,true),hash));
         Test("WinRAR plain RAR", () => Success(Run(Pack(rar,"plain.rar",fixture,null,false),rar),hash));
-        Test("WinRAR file encryption without header encryption", () => Success(Run(Pack(rar,"body-encrypted.rar",fixture,"爱坤",false,false),rar),hash));
-        Test("WinRAR password whitespace and backslash", () => Success(Run(Pack(rar,"spaces.rar",fixture," 爱坤\\ ",false),rar,false,new[]{"wrong"," 爱坤\\ "}),hash));
+        Test("WinRAR file encryption without header encryption", () => Success(Run(Pack(rar,"body-encrypted.rar",fixture,"测试专用密码B2026",false,false),rar),hash));
+        Test("WinRAR password whitespace and backslash", () => Success(Run(Pack(rar,"spaces.rar",fixture," 测试专用密码B2026\\ ",false),rar,false,new[]{"wrong"," 测试专用密码B2026\\ "}),hash));
         Test("7-Zip MP4 prefix followed by ZIP", () => {
             string fake = Path.Combine(root,"prefix.mp4");
             using(var stream = File.Create(fake)) { stream.Write(new byte[64],0,64); var archive = File.ReadAllBytes(zip); stream.Write(archive,0,archive.Length); }

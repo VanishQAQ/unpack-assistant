@@ -14,14 +14,16 @@ namespace LayerUnpacker
         readonly Label heading = new Label { Dock = DockStyle.Top, Height = 48 };
         readonly Control[] pages;
         readonly Control log, advanced;
+        readonly Control antivirus, language;
         readonly StorageForm storage;
         public bool IsBusy { get { return storage != null && storage.IsBusy; } }
-        public SettingsForm(JobState[] states, string[] inputs, string output, Control logView, Control advancedView, bool running, Action export)
+        public SettingsForm(JobState[] states, string[] inputs, string output, Control logView, Control advancedView, bool running, Action export, Control antivirusView = null, Control languageView = null)
         {
             Text = "设置 · 拆包助手"; Font = new Font("Microsoft YaHei UI", 9F);
             BackColor = Color.FromArgb(244, 247, 251); ForeColor = Color.FromArgb(27, 43, 65);
             ClientSize = new Size(1120, 620); MinimumSize = new Size(1060, 560); StartPosition = FormStartPosition.CenterParent;
             log = logView; advanced = advancedView;
+            antivirus = antivirusView; language = languageView;
             var grid = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(18), ColumnCount = 2 };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); Controls.Add(grid);
             var bar = new Panel { Dock = DockStyle.Top, Height = 56, Padding = new Padding(18, 12, 18, 6) };
@@ -31,16 +33,18 @@ namespace LayerUnpacker
             navigation.Dock = DockStyle.Fill; navigation.BorderStyle = BorderStyle.None; navigation.BackColor = BackColor;
             navigation.IntegralHeight = false; navigation.ItemHeight = 46; navigation.DrawMode = DrawMode.OwnerDrawFixed;
             navigation.Items.AddRange(new object[] { "打开结果", "导出报告", "结果管理", "运行记录", "高级选项" });
+            if (antivirus != null) navigation.Items.Add("病毒扫描");
+            if (language != null) navigation.Items.Add("语言");
             navigation.DrawItem += delegate(object sender, DrawItemEventArgs e) {
                 if (e.Index < 0) return;
                 bool selected = (e.State & DrawItemState.Selected) != 0;
                 using (var brush = new SolidBrush(selected ? Color.FromArgb(225, 235, 253) : BackColor)) e.Graphics.FillRectangle(brush, e.Bounds);
-                TextRenderer.DrawText(e.Graphics, navigation.Items[e.Index].ToString(), Font, new Rectangle(e.Bounds.X + 14, e.Bounds.Y, e.Bounds.Width - 14, e.Bounds.Height), selected ? Color.FromArgb(39, 103, 224) : ForeColor, TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+                TextRenderer.DrawText(e.Graphics, Language.T(navigation.Items[e.Index].ToString()), Font, new Rectangle(e.Bounds.X + 14, e.Bounds.Y, e.Bounds.Width - 14, e.Bounds.Height), selected ? Color.FromArgb(39, 103, 224) : ForeColor, TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
             };
             grid.Controls.Add(navigation, 0, 0);
             var right = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20, 12, 12, 12), BackColor = Color.White };
             heading.Font = new Font(Font.FontFamily, 17, FontStyle.Bold); right.Controls.Add(content); right.Controls.Add(heading); grid.Controls.Add(right, 1, 0);
-            pages = new Control[5];
+            pages = new Control[5 + (antivirus == null ? 0 : 1) + (language == null ? 0 : 1)];
             var results = new Panel();
             var list = new ListBox { Dock = DockStyle.Fill, IntegralHeight = false, HorizontalScrollbar = true };
             var paths = states.SelectMany(s => s.Nodes.Where(n => n.Status == "完成").Select(n => n.Result)).Distinct().ToArray();
@@ -49,9 +53,9 @@ namespace LayerUnpacker
             var open = new Button { Text = "打开选中目录", Dock = DockStyle.Bottom, Height = 36 };
             open.Click += delegate {
                 string path = list.SelectedItem as string;
-                if (path == null || !Directory.Exists(path)) { MessageBox.Show(this, "该目录尚未创建。", "打开结果"); return; }
+                if (path == null || !Directory.Exists(path)) { LocalizedMessageBox.Show(this, "该目录尚未创建。", "打开结果"); return; }
                 try { Process.Start(new ProcessStartInfo("explorer.exe", BandizipEngine.Quote(path)) { UseShellExecute = false }); }
-                catch { MessageBox.Show(this, "无法打开目录。", "打开结果"); }
+                catch { LocalizedMessageBox.Show(this, "无法打开目录。", "打开结果"); }
             };
             results.Controls.Add(list); results.Controls.Add(open); pages[0] = results;
             var report = new Panel();
@@ -70,17 +74,21 @@ namespace LayerUnpacker
             }
             else pages[2] = new Label { Text = "任务运行中，请完成后重新打开设置管理结果。", AutoSize = false };
             pages[3] = log; pages[4] = advanced; advanced.Enabled = !running;
+            if (antivirus != null) { pages[5] = antivirus; antivirus.Enabled = !running; }
+            if (language != null) { pages[pages.Length - 1] = language; language.Enabled = !running; }
             foreach (var page in pages) { page.Dock = DockStyle.Fill; content.Controls.Add(page); page.Visible = false; }
             navigation.SelectedIndexChanged += delegate {
                 for (int i = 0; i < pages.Length; i++) pages[i].Visible = i == navigation.SelectedIndex;
                 heading.Text = navigation.SelectedItem.ToString(); pages[navigation.SelectedIndex].BringToFront();
             };
             navigation.SelectedIndex = 0;
-            FormClosing += delegate(object sender, FormClosingEventArgs e) { if (storage != null && storage.IsBusy) { e.Cancel = true; MessageBox.Show(this, "正在统计或清理，请完成后关闭设置。", "设置"); } };
+            Language.Apply(this);
+            FormClosing += delegate(object sender, FormClosingEventArgs e) { if (storage != null && storage.IsBusy) { e.Cancel = true; LocalizedMessageBox.Show(this, "正在统计或清理，请完成后关闭设置。", "设置"); } };
         }
+        public void RefreshLanguage() { Language.Apply(this); foreach (var page in pages) Language.Apply(page); if (storage != null) storage.RefreshLanguage(); navigation.Invalidate(); }
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { content.Controls.Remove(log); content.Controls.Remove(advanced); advanced.Enabled = true; }
+            if (disposing) { if (language != null) { content.Controls.Remove(language); language.Enabled = true; } content.Controls.Remove(log); content.Controls.Remove(advanced); advanced.Enabled = true; if (antivirus != null) { content.Controls.Remove(antivirus); antivirus.Enabled = true; } }
             base.Dispose(disposing);
         }
     }

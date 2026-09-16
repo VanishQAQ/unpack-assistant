@@ -87,11 +87,11 @@ namespace LayerUnpacker
             args.Add(System.IO.Path.GetFullPath(source));
             return Execute(PathName, args, timeout, cancel, monitor);
         }
-        internal static EngineResult Execute(string path, IEnumerable<string> args, int timeout, CancellationToken cancel, Action monitor)
+        internal static EngineResult Execute(string path, IEnumerable<string> args, int timeout, CancellationToken cancel, Action monitor, Encoding encoding = null)
         {
             var start = new ProcessStartInfo(path, string.Join(" ", args.Select(Quote)))
             { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
-                StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8, WorkingDirectory = System.IO.Path.GetDirectoryName(path) };
+                StandardOutputEncoding = encoding ?? Encoding.UTF8, StandardErrorEncoding = encoding ?? Encoding.UTF8, WorkingDirectory = System.IO.Path.GetDirectoryName(path) };
             using (var process = new Process { StartInfo = start })
             {
                 var text = new StringBuilder(); object gate = new object(); bool tooMuch = false;

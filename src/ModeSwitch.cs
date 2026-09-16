@@ -63,8 +63,8 @@ namespace LayerUnpacker
             float half = (Width - 8) / 2f;
             using (var thumb = Rounded(new RectangleF(4 + half * position, 4, half, Height - 8)))
             using (var brush = new SolidBrush(Enabled ? Color.FromArgb(39, 103, 224) : Color.Gray)) e.Graphics.FillPath(brush, thumb);
-            TextRenderer.DrawText(e.Graphics, "普通", Font, new Rectangle(4, 0, (int)half, Height), !selected ? Color.White : ForeColor, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-            TextRenderer.DrawText(e.Graphics, "分卷", Font, new Rectangle(4 + (int)half, 0, (int)half, Height), selected ? Color.White : ForeColor, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            TextRenderer.DrawText(e.Graphics, Language.T("普通"), Font, new Rectangle(4, 0, (int)half, Height), !selected ? Color.White : ForeColor, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            TextRenderer.DrawText(e.Graphics, Language.T("分卷"), Font, new Rectangle(4 + (int)half, 0, (int)half, Height), selected ? Color.White : ForeColor, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
         protected override void Dispose(bool disposing) { if (disposing) animation.Dispose(); base.Dispose(disposing); }
     }

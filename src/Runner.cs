@@ -14,6 +14,8 @@ namespace LayerUnpacker
         public readonly object Sync = new object();
         public event Action<string> Changed;
         public event Action<Exception> Diagnostic;
+        public IVirusScanner VirusScanner = new DefenderScanner();
+        public Func<VirusScanRecord, bool> ConfirmScanRisk;
         public volatile bool PauseRequested;
         public CancellationTokenSource Cancellation = new CancellationTokenSource();
         readonly ArchiveEngine engine;
@@ -189,6 +191,7 @@ namespace LayerUnpacker
                         if (node.Status != "待扫描") Extract(node);
                         if (node.Status == "待扫描") Scan(node);
                     }
+                    catch (VirusScanStopped) { throw; }
                     catch (StopException e) { Set(node, e.State, e.Message); }
                     catch (OperationCanceledException) { Set(node, node.Status == "待扫描" ? "待扫描" : "已取消", "已取消，可点击继续重新处理当前节点。"); throw; }
                     catch (Exception e)
@@ -201,6 +204,7 @@ namespace LayerUnpacker
                 bool pending = State.Nodes.Any(n => n.Status == "等待密码");
                 State.Status = complete ? "成功" : pending ? "等待密码" : State.Nodes.Any(n => n.Status == "完成") ? "部分完成" : "失败";
             }
+            catch (VirusScanStopped) { State.Status = "扫描暂停"; Notify("扫描未放行，任务已暂停。可检查防护状态后点击继续重新扫描。"); }
             catch (OperationCanceledException) { State.Status = "已取消"; }
             catch (StopException e) { State.Status = e.State; RecordPreparationFailure(e.Message); Notify(e.Message); }
             catch (Exception e)
@@ -285,6 +289,7 @@ namespace LayerUnpacker
                 else ZipGuard.Check(node.Source);
             }
             if (Repeated(node)) throw new StopException("受限", "检测到与祖先归档相同的内容，已停止重复展开。");
+            foreach (string target in volumes ? VolumeSet.PathsFor(node) : new[] { node.Source }) CheckVirus(node, target, "解压前");
             engine.CheckFormat(node.Format);
             bool crc = false;
             foreach (string candidate in Candidates(node))
@@ -370,6 +375,8 @@ namespace LayerUnpacker
         void Scan(ArchiveNode node)
         {
             Checkpoint(node); Set(node, "待扫描", "正在保留普通文件并识别内层归档。");
+            CheckVirus(node, node.Payload, "本层解压后");
+            if (State.VirusScanEnabled) ValidatePayload(node);
             Directory.CreateDirectory(node.Result);
             foreach (string relative in node.Directories)
             {
@@ -396,6 +403,26 @@ namespace LayerUnpacker
             }
             Set(node, "完成", "本层完成；已导出 " + node.Exported.Count + " 个普通文件。");
         }
+        void CheckVirus(ArchiveNode node, string target, string phase)
+        {
+            if (!State.VirusScanEnabled) return;
+            Cancellation.Token.ThrowIfCancellationRequested();
+            Notify(State.VirusScannerName + " · " + phase + "扫描：" + target);
+            var result = VirusScanner.Scan(target, State.Limits.TimeoutSeconds, Cancellation.Token);
+            Cancellation.Token.ThrowIfCancellationRequested();
+            var record = new VirusScanRecord { Engine = State.VirusScannerName, Node = node.Id, Time = DateTime.Now.ToString("s"), Phase = phase, Target = target, Status = result.Status, Detail = result.Detail };
+            if (State.VirusScans == null) State.VirusScans = new List<VirusScanRecord>();
+            if (State.VirusScans.Count >= 10000) throw new StopException("受限", "扫描记录达到上限，请导出报告后新建任务。");
+            lock (Sync) State.VirusScans.Add(record); Save(); Notify(result.Status + "：" + target);
+            if (result.Clean) return;
+            record.Continued = ConfirmScanRisk != null && ConfirmScanRisk(record);
+            if (record.Continued && record.Status == "等待人工确认") record.Status = "人工确认继续（未自动验证结果）";
+            Save();
+            Cancellation.Token.ThrowIfCancellationRequested();
+            Notify(record.Continued ? "用户确认继续处理本次扫描涉及的文件。" : "用户停止处理本次扫描涉及的文件。");
+            if (!record.Continued) { node.Message = phase + " · " + result.Status + "；已停止，等待处理。"; Save(); throw new VirusScanStopped(); }
+            if (!File.Exists(target) && !Directory.Exists(target)) throw new StopException("文件已变化", "文件已被移除或隔离，无法继续。");
+        }
         public void WriteReport()
         {
             StorageManager.WriteIndex(State);
@@ -403,6 +430,9 @@ namespace LayerUnpacker
             sb.AppendLine("# 自动多层解压工具 · 处理报告").AppendLine();
             sb.AppendLine("状态：" + State.Status).AppendLine();
             sb.AppendLine("模式：" + (State.VolumeMode ? "分卷解压" : "普通解压")).AppendLine();
+            sb.AppendLine("病毒扫描：" + (State.VirusScanEnabled ? State.VirusScannerName : "未开启"));
+            foreach (var scan in State.VirusScans ?? new List<VirusScanRecord>())
+                sb.AppendLine().AppendLine("- " + scan.Time + " / 第 " + scan.Node + " 节点 / " + scan.Phase + " / " + scan.Status + " / " + (scan.Engine ?? "Microsoft Defender")).AppendLine("  目标：" + scan.Target).AppendLine("  " + scan.Detail.Replace("\n", "\n  ")).AppendLine("  风险继续确认：" + (scan.Continued ? "用户选择继续" : "未放行或无需确认"));
             foreach (var node in State.Nodes.Where(n => n.Volumes != null && n.Volumes.Count > 0))
             { sb.AppendLine("第 " + node.Depth + " 层分卷：" + node.Volumes.Count + " 卷"); foreach (var volume in node.Volumes) sb.AppendLine("- " + volume.Name); sb.AppendLine(); }
             if (State.IntermediateCleaned) sb.AppendLine(State.CleanupPending ? "中间文件清理未完成，可在结果管理中重试。" : "已清理登记的中间文件；最终结果保留。需要重新解压时请从原始输入新建任务。").AppendLine();

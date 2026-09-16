@@ -55,6 +55,9 @@ namespace LayerUnpacker
         public string Created;
         public string Status = "排队";
         public bool VolumeMode;
+        public bool VirusScanEnabled;
+        public string VirusScannerName = "Microsoft Defender";
+        public List<VirusScanRecord> VirusScans = new List<VirusScanRecord>();
         public long WrittenBytes;
         public long WrittenFiles;
         public bool IntermediateCleaned;

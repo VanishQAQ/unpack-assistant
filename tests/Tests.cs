@@ -98,7 +98,7 @@ static class Tests
         });
         Test("T07 中文/首尾空格/反斜杠密码", delegate
         {
-            string key = " 爱坤 x\\ "; string zip = Pack(d, "unicode.7z", key, "内容"); var r = Run(zip, new[] { key.Trim(), key }); Success(r);
+            string key = " 测试专用密码B2026 x\\ "; string zip = Pack(d, "unicode.7z", key, "内容"); var r = Run(zip, new[] { key.Trim(), key }); Success(r);
         });
         Test("T07 引号密码明确拒绝", delegate { bool rejected = false; try { Run(leaf, new[] { "a\"b" }); } catch (StopException) { rejected = true; } Assert(rejected, "Quote password should be rejected"); });
         Test("T08 截断包不得成功", delegate

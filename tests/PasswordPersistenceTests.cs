@@ -9,7 +9,7 @@ using LayerUnpacker;
 
 static class PasswordPersistenceTests
 {
-    static readonly string[] Keys = { "sample-password-one", " 爱坤 ", "abc\\def" };
+    static readonly string[] Keys = { "sample-password-one", " 测试专用密码B2026 ", "abc\\def" };
     [STAThread] static void Main(string[] args)
     {
         try

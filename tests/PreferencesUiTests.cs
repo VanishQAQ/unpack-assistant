@@ -29,6 +29,8 @@ class PreferencesUiTests
                     for (int i = 0; i < names.Length; i++) ((NumericUpDown)Field(form, names[i])).Value = values[i];
                     ((TextBox)Field(form, "enginePath")).Text = @"E:\工具目录\7z.exe";
                     ((CheckBox)Field(form, "show")).Checked = true;
+                    Check(((CheckBox)Field(form, "virusScan")).Checked, "Scanner must default on");
+                    ((CheckBox)Field(form, "virusScan")).Checked = false;
                     ((ModeSwitch)Field(form, "mode")).VolumeMode = true;
                     string input = Path.Combine(folder, "输入样本.zip"); File.WriteAllText(input, "fixture");
                     typeof(MainForm).GetMethod("AddInputs", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(form, new object[] { new[] { input } });
@@ -43,6 +45,7 @@ class PreferencesUiTests
                     for (int i = 0; i < names.Length; i++) Check(((NumericUpDown)Field(form, names[i])).Value == values[i], names[i] + " not restored");
                     Check(((TextBox)Field(form, "enginePath")).Text == @"E:\工具目录\7z.exe", "Engine path lost");
                     Check(((CheckBox)Field(form, "show")).Checked, "Reveal preference lost");
+                    Check(!((CheckBox)Field(form, "virusScan")).Checked, "Scanner preference lost");
                     Check(((ModeSwitch)Field(form, "mode")).VolumeMode, "Volume mode preference lost");
                     Check(((ListView)Field(form, "files")).Items.Count == 1, "Input queue lost");
                     Check(!(bool)Field(form, "running"), "Queue started automatically");
